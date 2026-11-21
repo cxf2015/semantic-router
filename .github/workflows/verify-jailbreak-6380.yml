@@ -1,0 +1,36 @@
+name: Verify jailbreak input coverage
+
+on:
+  push:
+    branches: [verify/jailbreak-unscanned-6380]
+
+permissions:
+  contents: read
+
+jobs:
+  router:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SR_TEST_MODE: "true"
+      SKIP_MILVUS_TESTS: "true"
+      SKIP_QDRANT_TESTS: "true"
+      SKIP_REDIS_TESTS: "true"
+      SKIP_VALKEY_TESTS: "true"
+      SKIP_LLAMA_STACK_TESTS: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 3
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache-dependency-path: src/semantic-router/go.sum
+      - name: Check the patch for whitespace errors
+        run: git diff --check HEAD^^ HEAD^
+      - name: Jailbreak coverage and routing regression
+        working-directory: src/semantic-router
+        run: go test -v ./pkg/classification ./pkg/extproc -run 'TestJailbreakUnreadContent|TestGuardProvenance|TestAJailbreakRule' -count=1
+      - name: Affected Router packages
+        working-directory: src/semantic-router
+        run: go test ./pkg/classification ./pkg/extproc ./pkg/config -count=1
