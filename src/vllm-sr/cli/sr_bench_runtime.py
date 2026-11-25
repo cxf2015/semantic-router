@@ -46,6 +46,16 @@ class BenchRuntime:
         return self.store is not None
 
 
+def bench_worker_home(store: Path) -> Path:
+    """The worker container user's HOME, prepared on the mounted store.
+
+    The worker runs with the host uid and no passwd entry, so its HOME would
+    otherwise resolve to the image's unwritable ``/`` and Hugging Face
+    downloads fail creating ``/.cache`` (#7376).
+    """
+    return store / "worker-home"
+
+
 def _private_token(path: Path) -> str:
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     if path.parent.is_symlink():
@@ -150,6 +160,12 @@ def prepare_bench_runtime(
     store.mkdir(parents=True, exist_ok=True, mode=0o700)
     store = store.resolve()
     os.chmod(store, 0o700)
+    # The worker container has no passwd entry for the host uid, so prepare
+    # its HOME here: dataset downloads cache under HOME and the image's / is
+    # not writable (#7376).
+    worker_home = bench_worker_home(store)
+    worker_home.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(worker_home, 0o700)
     token = environment.get(token_ref) or _private_token(root / "service-token")
     values = {token_ref: token}
     # The service owns gated source downloads; never send this credential to the

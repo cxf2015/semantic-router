@@ -71,6 +71,7 @@ from cli.sr_bench_runtime import (
     BENCH_IDENTITY_LABEL,
     BenchRuntime,
     bench_command_identity,
+    bench_worker_home,
     dashboard_bench_env,
     prepare_bench_runtime,
 )
@@ -780,13 +781,16 @@ def _build_bench_runtime_spec(
     worker_env = dict.fromkeys(bench.secrets, "")
     # The service has one fixed token variable; the Dashboard may use a custom ref.
     worker_env["SR_BENCH_TOKEN"] = ""
+    # The container user has no passwd entry, so HOME is fixed to a prepared
+    # store path; otherwise HOME resolves to the unwritable image root and
+    # dataset downloads fail creating /.cache (#7376).
     cmd = _build_service_run_command(
         runtime=runtime,
         image=image,
         container_name=stack_layout.sr_bench_container_name,
         nofile_limit=nofile_limit,
         network_name=network_name,
-        env_vars=worker_env,
+        env_vars={"HOME": str(bench_worker_home(bench.store)), **worker_env},
         mount_specs=[f"{bench.store}:{bench.store}:z"],
         port_mappings=[("127.0.0.1", stack_layout.sr_bench_port, 8090)],
         entrypoint="/opt/vllm-sr-dashboard-venv/bin/python",

@@ -137,6 +137,31 @@ def test_bench_container_has_no_runtime_socket_or_gpu_and_token_never_enters_arg
     )
 
 
+def test_worker_container_home_is_prepared_and_fixed_under_the_store(
+    tmp_path, monkeypatch
+):
+    stack = resolve_runtime_stack()
+    monkeypatch.setenv("HOME", "/host-home-that-must-not-reach-the-worker")
+    bench = prepare_bench_runtime(str(tmp_path), stack, {})
+    home = bench.store / "worker-home"
+    assert home.is_dir()
+    assert stat.S_IMODE(home.stat().st_mode) == 0o700
+    command, health = container_start._build_bench_runtime_spec(
+        runtime="docker",
+        image="dashboard:test",
+        nofile_limit=10000,
+        network_name=stack.network_name,
+        stack_layout=stack,
+        bench=bench,
+    )[2]
+    env_values = [
+        command[index + 1] for index, arg in enumerate(command) if arg == "-e"
+    ]
+    assert f"HOME={home}" in env_values
+    assert "SR_BENCH_TOKEN" in env_values
+    assert "/host-home-that-must-not-reach-the-worker" not in " ".join(command + health)
+
+
 def test_reuse_requires_running_matching_worker_and_never_starts_a_stopped_one(
     monkeypatch,
 ):
